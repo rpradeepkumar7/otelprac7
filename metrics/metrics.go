@@ -1,44 +1,25 @@
 package metrics
 
 import (
-	"context"
-	"log"
-	"time"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/sdk/resource"
-	"go.opentelemetry.io/otel/sdk/metric"
-	//"otelprac2/logging"
-        "otelprac2/metrics"
-        //"otelprac2/tracing"
-        //"github.com/rpradeepkumar7/otelprac2/logging"
-        "github.com/rpradeepkumar7/otelprac2/metrics"
-        //"github.com/rpradeepkumar7/otelprac2/tracing"
+    "github.com/prometheus/client_golang/prometheus"
 )
 
-func InitMeterProvider(ctx context.Context) {
-	res, err := resource.New(
-		ctx,
-		resource.WithAttributes(
-			attribute.String("service.name", "web-backend"),
-			attribute.String("host.name", "web-server-1"),
-			attribute.String("host.ip", "192.168.1.1"),
-		),
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
+func InitMetrics() *prometheus.Registry {
+    registry := prometheus.NewRegistry()
 
-	provider := metric.NewMeterProvider(
-		metric.WithResource(res),
-	)
-	otel.SetMeterProvider(provider)
-}
+    httpRequestsTotal := prometheus.NewCounterVec(
+        prometheus.CounterOpts{
+            Name: "http_requests_total",
+            Help: "Total number of HTTP requests",
+        },
+        []string{"method", "endpoint"},
+    )
 
-func RecordMetrics(ctx context.Context) {
-	meter := otel.Meter("example-meter")
-	latency := meter.NewFloat64Histogram("network.latency")
+    cpuUsage := prometheus.NewGauge(prometheus.GaugeOpts{
+        Name: "cpu_usage",
+        Help: "Current CPU usage",
+    })
 
-	latency.Record(ctx, 100.5, attribute.String("host.name", "web-server-1"))
-	time.Sleep(2 * time.Second)
+    registry.MustRegister(httpRequestsTotal, cpuUsage)
+    return registry
 }

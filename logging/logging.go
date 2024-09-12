@@ -1,114 +1,87 @@
 package logging
 
 import (
-	"context"
-	"log"
-	"os"
-	"time"
-	"encoding/json"
-	"otelprac2/logging"
-        //"otelprac2/metrics"
-        //"otelprac2/tracing"
-        "github.com/rpradeepkumar7/otelprac2/logging"
-        //"github.com/rpradeepkumar7/otelprac2/metrics"
-        //"github.com/rpradeepkumar7/otelprac2/tracing"
+    "net"
+    "os"
+    "runtime"
+    "time"
+    "log"
+    "golang.org/x/sys/unix"
 )
 
-type OTelLog struct {
-	Timestamp           string `json:"Timestamp"`
-	ObservedTimestamp   string `json:"ObservedTimestamp"`
-	TraceId             string `json:"TraceId"`
-	SpanId              string `json:"SpanId"`
-	SeverityText        string `json:"SeverityText"`
-	SeverityNumber      string `json:"SeverityNumber"`
-	Body                string `json:"Body"`
-	Resource            struct {
-		ServiceName string `json:"service.name"`
-		HostName    string `json:"host.name"`
-		HostIP      string `json:"host.ip"`
-		HostMAC     string `json:"host.mac"`
-		OSType      string `json:"os.type"`
-		OSVersion   string `json:"os.version"`
-	} `json:"Resource"`
-	InstrumentationScope struct {
-		Name    string `json:"Name"`
-		Version string `json:"Version"`
-	} `json:"InstrumentationScope"`
-	Attributes struct {
-		HTTPMethod     string `json:"http.method"`
-		HTTPStatusCode string `json:"http.status_code"`
-		HTTPURL        string `json:"http.url"`
-		DBOperation    string `json:"db.operation"`
-		FirewallStatus string `json:"firewall.status"`
-		NetworkLatency string `json:"network.latency"`
-		CPUUsage       string `json:"cpu.usage"`
-		MemoryUsage    string `json:"memory.usage"`
-	} `json:"Attributes"`
-	EventData struct {
-		EventName string `json:"event.name"`
-		EventType string `json:"event.type"`
-	} `json:"EventData"`
-	Exception struct {
-		Message    string `json:"exception.message"`
-		Type       string `json:"exception.type"`
-		StackTrace string `json:"exception.stacktrace"`
-	} `json:"Exception"`
-	Duration string `json:"Duration"`
-	Status   string `json:"Status"`
-	LogLevel string `json:"LogLevel"`
+type LogEntry struct {
+    Timestamp         string            `json:"Timestamp"`
+    ObservedTimestamp string            `json:"ObservedTimestamp"`
+    Hostname          string            `json:"host.name"`
+    IPAddress         string            `json:"host.ip"`
+    MacAddress        string            `json:"host.mac"`
+    OSType            string            `json:"os.type"`
+    OSVersion         string            `json:"os.version"`
+    FirewallStatus    string            `json:"firewall.status"`
+    NetworkLatency    string            `json:"network.latency"`
 }
 
-func InitLogger(ctx context.Context) {
-	// Example log creation
-	logEntry := OTelLog{
-		Timestamp:         time.Now().Format(time.RFC3339),
-		ObservedTimestamp: time.Now().Format(time.RFC3339),
-		TraceId:           "abcd1234",
-		SpanId:            "efgh5678",
-		SeverityText:      "ERROR",
-		SeverityNumber:    "17",
-		Body:              "An error occurred while processing the request.",
-		Duration:          "500ms",
-		Status:            "Error",
-		LogLevel:          "Critical",
-	}
+func GetSystemInfo() (string, string, string, string, string) {
+    hostname, _ := os.Hostname()
 
-	logEntry.Resource.ServiceName = "web-backend"
-	logEntry.Resource.HostName = "web-server-1"
-	logEntry.Resource.HostIP = "192.168.1.1"
-	logEntry.Resource.HostMAC = "00:1A:2B:3C:4D:5E"
-	logEntry.Resource.OSType = "Linux"
-	logEntry.Resource.OSVersion = "Ubuntu 20.04"
+    // Get IP and MAC address
+    interfaces, err := net.Interfaces()
+    if err != nil {
+        log.Fatal(err)
+    }
 
-	logEntry.InstrumentationScope.Name = "example-logger"
-	logEntry.InstrumentationScope.Version = "1.0.0"
+    var ipAddress, macAddress string
+    for _, iface := range interfaces {
+        addrs, err := iface.Addrs()
+        if err != nil {
+            continue
+        }
 
-	logEntry.Attributes.HTTPMethod = "GET"
-	logEntry.Attributes.HTTPStatusCode = "500"
-	logEntry.Attributes.HTTPURL = "http://example.com"
-	logEntry.Attributes.DBOperation = "SELECT"
-	logEntry.Attributes.FirewallStatus = "enabled"
-	logEntry.Attributes.NetworkLatency = "100ms"
-	logEntry.Attributes.CPUUsage = "75%"
-	logEntry.Attributes.MemoryUsage = "60%"
+        for _, addr := range addrs {
+            ipNet, ok := addr.(*net.IPNet)
+            if ok && !ipNet.IP.IsLoopback() && ipNet.IP.To4() != nil {
+                ipAddress = ipNet.IP.String()
+                macAddress = iface.HardwareAddr.String()
+                break
+            }
+        }
+        if ipAddress != "" && macAddress != "" {
+            break
+        }
+    }
 
-	logEntry.EventData.EventName = "example-event"
-	logEntry.EventData.EventType = "example-type"
+    osType := runtime.GOOS
+    osVersion := getOSVersion()
 
-	logEntry.Exception.Message = "Null Pointer Exception"
-	logEntry.Exception.Type = "NullPointerException"
-	logEntry.Exception.StackTrace = "stack trace details here"
-
-	// Print log as JSON
-	jsonData, err := json.MarshalIndent(logEntry, "", "  ")
-	if err != nil {
-		log.Fatalf("Error marshalling log entry: %v", err)
-	}
-
-	log.SetOutput(os.Stdout)
-	log.Println(string(jsonData))
+    return hostname, ipAddress, macAddress, osType, osVersion
 }
 
-func LogEvent(ctx context.Context) {
-	InitLogger(ctx)
+func getOSVersion() string {
+    var utsname unix.Utsname
+    if err := unix.Uname(&utsname); err != nil {
+        return "unknown"
+    }
+    return string(utsname.Release[:])
+}
+
+func GetFirewallStatus() string {
+    return "enabled"
+}
+
+func GetNetworkLatency() string {
+    return "50ms"
+}
+
+func NewLogEntry(hostname, ipAddress, macAddress, osType, osVersion, firewallStatus, networkLatency string) LogEntry {
+    return LogEntry{
+        Timestamp:         time.Now().Format(time.RFC3339),
+        ObservedTimestamp: time.Now().Add(100 * time.Millisecond).Format(time.RFC3339),
+        Hostname:          hostname,
+        IPAddress:         ipAddress,
+        MacAddress:        macAddress,
+        OSType:            osType,
+        OSVersion:         osVersion,
+        FirewallStatus:    firewallStatus,
+        NetworkLatency:    networkLatency,
+    }
 }
